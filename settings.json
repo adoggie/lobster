@@ -1,0 +1,21 @@
+{
+    "lobnum": 1000000,
+    "feed_type": "mdl_zmq",
+    "save_pxlist_infile": true,
+    "save_in_dir": "/path/to/save/directory",
+    "workers": 5,
+    "symbol_price_limit_file":"./tests/symbol_price_limit_%1.csv",
+    "symbol_list_file":"./tests/symbol_list.txt",
+    "mdl_csv": {
+      "datadir": "value1",
+      "speed": 1
+    },
+    "mdl_live": {
+      "server_addr": "tcp://127.0.0.1:5555",
+      "setting4": "value4"
+    },
+    "mdl_zmq": {
+      "server_addr": "tcp://127.0.0.1:5555",
+      "mode": "sub"
+    }
+  }

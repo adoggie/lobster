@@ -46,24 +46,11 @@ struct zmq_feed_setting_t {
 };
 
 
-struct lob_config_t {
-    uint32_t  lobnum; // 100000
-    std::string feed_type;   // feed name: mdl_csv , mdl_live ,
-    bool  save_pxlist_infile; // true or false
-    std::string save_in_dir; 
-    std::string symbol_price_limit_file;
-    std::string symbol_list_file;
-    // uint32_t  symnum_in_worker =1; // worker threads 
-    uint32_t  workers; // 1 - 100
-    mdl_live_feed_setting_t live_setting;
-    mdl_csv_feed_setting_t csv_setting;
-    zmq_feed_setting_t zmq_setting;
-};
-
 #pragma pack(push, 1)
 struct lob_px_t {
     uint8_t  bs; // buy or sell 0 - buy , 1 - sell
     uint32_t  px;
+    uint32_t    ordTime;
     std::atomic<int32_t> qty;
 };
 #pragma pack(pop)
@@ -87,12 +74,15 @@ struct lob_px_list_t {
     }
 };
 
+#include <msgpack.hpp>
+
 struct lob_px_record_t{
     uint8_t     source;     // sh or sz 
     symbolid_t symbolid;
     typedef std::shared_ptr<lob_px_record_t> Ptr;
     std::vector< std::tuple<lob_price_t,lob_qty_t> > asks;
     std::vector<std::tuple<lob_price_t,lob_qty_t> > bids;
+    MSGPACK_DEFINE(source, symbolid, asks, bids);
 };
 
 
@@ -106,13 +96,13 @@ struct lob_px_history_t {
 // offset = 600021 - 0
 // LOB_NUM =
 // #define  MAX_LOB_NUM  100000
-struct lob_dir_t {
-    uint32_t      version;
-    lob_config_t  config;
-    std::vector<lob_px_list_t*> live; // 0 - 600021
-    std::vector<lob_px_history_t*> history; 
+// struct lob_dir_t {
+//     uint32_t      version;
+//     lob_config_t  config;
+//     std::vector<lob_px_list_t*> live; // 0 - 600021
+//     std::vector<lob_px_history_t*> history; 
     
-};
+// };
 
 struct lob_context_t {
     void* service; // lob_dir_t    
@@ -146,7 +136,7 @@ int     px_high_low(const char* symbol, uint32_t& low, uint32_t& high);
 lob_context_t* init_context(const char* config, int& error);
 void    free_context(lob_context_t* ctx);
 
-void parse_lob_config_from_jsonfile(const char* filename, lob_config_t* config);
+// void parse_lob_config_from_jsonfile(const char* filename, lob_config_t* config);
 
 #endif
 

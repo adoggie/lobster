@@ -1,10 +1,18 @@
 #include <QCoreApplication>
 #include <QByteArray>
 #include <iostream>
+#include <qnumeric.h>
 #include <vector>
 #include <ranges>
 #include <thread>
-#include "signal.h"
+#include <signal.h>
+
+#include <log4cplus/logger.h>
+#include <log4cplus/loggingmacros.h>
+#include <log4cplus/configurator.h>
+#include <log4cplus/initializer.h>
+
+
 
 #include "service.h"
 
@@ -43,6 +51,16 @@ void signalHandler(int signal) {
 }
 
 int main(int argc, char *argv[]){
+
+    log4cplus::Initializer initializer;
+    log4cplus::BasicConfigurator config;
+    config.configure();
+
+    log4cplus::Logger logger = log4cplus::Logger::getInstance(
+        LOG4CPLUS_TEXT("main"));
+    LOG4CPLUS_INFO(logger, LOG4CPLUS_TEXT("AppService[lobster] started.."));
+    
+    qDebug( "AppService[lobster] started..");
     LobService::instance().init("settings.json");
     LobService::instance().start();
     LobService::instance().waitForShutdown();

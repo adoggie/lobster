@@ -2,9 +2,9 @@
 #include "lob.h"
 #include <cstring>
 
-void parse_lob_config_from_jsonfile(const char* filename, lob_config_t* config){
+// void parse_lob_config_from_jsonfile(const char* filename, lob_config_t* config){
 
-}
+// }
 
 
 lob_px_list_t * lob_px_list_alloc(){

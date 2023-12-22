@@ -8,9 +8,33 @@
 #include <map>
 #include <mutex>
 #include <condition_variable>
+
+#include <log4cplus/logger.h>
+#include <log4cplus/loggingmacros.h>
+
 #include "lob.h"
 #include "worker.h"
 #include "feed.h"
+#include "fanout.h"
+#include "utils/timer.h"
+
+
+struct lob_config_t {
+    uint32_t  lobnum; // 100000
+    std::string feed_type;   // feed name: mdl_csv , mdl_live ,
+    bool  save_pxlist_infile; // true or false
+    std::string save_in_dir; 
+    std::string symbol_price_limit_file;
+    std::string symbol_list_file;
+    // uint32_t  symnum_in_worker =1; // worker threads 
+    uint32_t  workers; // 1 - 100
+    mdl_live_feed_setting_t live_setting;
+    mdl_csv_feed_setting_t csv_setting;
+    zmq_feed_setting_t zmq_setting;
+    LobRecordFanout::Settings fanout_setting;
+    uint32_t     sample_interval_ms; // orb price list 采样时间
+    uint32_t     sample_px_depth;   // lob px depth
+};
 
 
 class LobService:public IFeedUser {
@@ -18,7 +42,7 @@ public:
     bool init(const std::string& configfile);
     bool start();
     void stop();
-    void getPxList(symbolid_t symbolid, size_t depth, std::list< lob_px_record_ptr > & list);
+    bool getPxList(symbolid_t symbolid, size_t depth, lob_px_record_t &pxr);
     void savePxList(symbolid_t symbolid);
     static LobService& instance(){
         static LobService s;
@@ -26,6 +50,7 @@ public:
     }
 
     void waitForShutdown();
+    log4cplus::Logger& getLogger()  { return logger_;}
 protected:
 friend class Worker;
     void onOrder(const  OrderMessage* m);
@@ -42,10 +67,9 @@ friend class Worker;
     lob_px_list_t* createPxList(symbolid_t symbolid);
     lob_px_history_t * createPxHistory(symbolid_t symbolid);
     bool getPxHighLow(symbolid_t symbolid, float& high, float& low);
-
     bool loadSymbolList();
+    void onFanoutTimed();
 private:
-
     lob_config_t  config_;
     std::vector<lob_px_list_t*> pxlive_; //
     std::vector<lob_px_history_t*> pxhistory_; //
@@ -74,6 +98,9 @@ private:
     std::condition_variable cond_;
     std::map<symbolid_t, std::pair<float,float > > limit_pxlist_;
     std::vector<symbolid_t>     symbol_list_;
+    LobRecordFanout::Ptr fanout_;
+    log4cplus::Logger logger_;
+    LobTimer timer_;
 };
 
 

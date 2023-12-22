@@ -1,0 +1,25 @@
+syntax = "proto3";
+package lob;
+
+
+
+message LobPxRecord {
+    enum Source {
+        SH = 0;
+        SZ = 1;
+    }
+
+    message LobPriceQty {
+        uint32 lob_price = 1;
+        uint32 lob_qty = 2;
+    }
+
+    message AsksBids {
+        repeated LobPriceQty asks = 1;
+        repeated LobPriceQty bids = 2;
+    }
+
+    Source source = 1;
+    uint32 symbol_id = 2;
+    AsksBids asks_bids = 3;
+}

@@ -5,6 +5,7 @@
 #include <tuple>
 #include <ctime>
 #include <sstream>
+#include <functional>
 // #include <json/json.h>
 #include <qcoreapplication.h>
 #include <QString>
@@ -14,6 +15,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+
+
 #include "service.h"
 #include "feed_csv.h"
 #include "feed_tlive.h"
@@ -22,6 +25,10 @@
 
 
 bool LobService::init(const std::string& configfile) {
+    logger_ = log4cplus::Logger::getInstance(
+        LOG4CPLUS_TEXT("service"));
+    LOG4CPLUS_INFO(logger_, LOG4CPLUS_TEXT("LobService::init.."));
+
     // std::ifstream ifs(configfile);
     QFile ifs(configfile.c_str());
     // Json::Value json;
@@ -35,7 +42,8 @@ bool LobService::init(const std::string& configfile) {
         // ifs = QFile (ss);
         ifs.setFileName(ss);
         if( !ifs.open(QIODevice::ReadOnly | QIODevice::Text)){
-            std::cerr << "Failed to open config file: " << configfile << std::endl;
+            // std::cerr << "Failed to open config file: " << configfile << std::endl;
+            LOG4CPLUS_ERROR(logger_, LOG4CPLUS_TEXT("Failed to open config file: ") << configfile);
             return false;
         }
     }
@@ -51,10 +59,6 @@ bool LobService::init(const std::string& configfile) {
 
     // Access specific values from the JSON object
     QJsonObject json = jsonDoc.object();
-    // QString name = jsonObj.value("name").toString();
-    // int age = jsonObj.value("age").toInt();
-
-    // ifs >> json;
     config_.lobnum = json.value("lobnum").toInt(1000000);
     config_.feed_type = json.value("feed_type").toString("mdl_csv").toStdString();
     config_.save_pxlist_infile = json.value("save_pxlist_infile").toBool();
@@ -63,11 +67,16 @@ bool LobService::init(const std::string& configfile) {
     config_.symbol_price_limit_file = json.value("symbol_price_limit_file").toString("symbol_price_limit_%1.csv").toStdString();    
     config_.csv_setting.datadir = json.value("mdl_csv").toObject().value("datadir").toString("./").toStdString();
     config_.csv_setting.speed = json.value("mdl_csv").toObject().value("speed").toInt(1);
-    config_.live_setting.server_addr = json["mdl_live"].toObject().value("server_addr").toString("tcp://127.0.0.1:5555").toStdString();
+    config_.live_setting.server_addr = json["mdl_live"].toObject().value("server_addr").toString("tcp://127.0.0.1:5554").toStdString();
     config_.zmq_setting.server_addr = json["mdl_zmq"].toObject().value("server_addr").toString("tcp://127.0.0.1:5555").toStdString();
     config_.zmq_setting.mode = json["mdl_zmq"].toObject().value("mode").toString("bind").toStdString();
     config_.symbol_list_file = json["symbol_list_file"].toString("").toStdString();
+    config_.sample_px_depth = json["sample_px_depth"].toInt(10);
+    config_.sample_interval_ms = json["sample_interval_ms"].toInt(1000);
 
+    config_.fanout_setting.server_addr = json["fanout"].toObject().value("server_addr").toString("tcp://127.0.0.1:5556").toStdString();
+    config_.fanout_setting.mode = json["fanout"].toObject().value("mode").toString("bind").toStdString();
+    config_.fanout_setting.enable = json["fanout"].toObject().value("enable").toBool(false);
     {
         loadSymbolList();
     }
@@ -132,6 +141,11 @@ bool LobService::init(const std::string& configfile) {
         pxlive_[n] = createPxList(n);
         pxhistory_[n] = createPxHistory(n);
     }
+
+    // init fanout 
+    if( config_.fanout_setting.enable){
+        fanout_ = std::make_shared<LobRecordFanout>(config_.fanout_setting);
+    }
     return true;
 }
 
@@ -140,8 +154,11 @@ bool LobService::start() {
         worker->start();
     }
     feeder_->start();
+    if( fanout_){
+        timer_.start( config_.sample_interval_ms, std::bind(&LobService::onFanoutTimed,this) );
+    }
     stopped_.store(false);
-
+    
     // save pxlist in file
     // if (config_.save_pxlist_infile) {
     //     thread_ = std::thread([this]() {
@@ -171,7 +188,7 @@ void LobService::stop() {
     cond_.notify_all();
 }
 
-void LobService::getPxList(symbolid_t symbolid, size_t depth, std::list< lob_px_record_ptr >& list){
+bool LobService::getPxList(symbolid_t symbolid, size_t depth, lob_px_record_t &pxr){
     lob_px_history_t* pxlist = pxhistory_[symbolid];
     std::shared_lock<RwMutex> lock(pxlist->mtx);
     int32_t shift = (int32_t) std::min(depth, static_cast<size_t>(pxlist->list.size()));
@@ -184,6 +201,7 @@ void LobService::getPxList(symbolid_t symbolid, size_t depth, std::list< lob_px_
     //         std::back_inserter(list), [](lob_px_record_ptr& ptr) {
     //             return ptr;
     //         });
+    return true;
 }   
 
 void LobService::savePxList(symbolid_t symbolid) {
@@ -221,9 +239,6 @@ void LobService::waitForShutdown(){
 
 void LobService::onOrder(const  OrderMessage* m)
 {
-    symbolid_t symbolid = m->SecurityID;
-    lob_px_list_t*  pxlist =  pxlive_[symbolid];
-    
     // 上交委托
     if(m->SecurityIDSource == Message::Source::SH){        
         onOrderSH(m);
@@ -320,6 +335,20 @@ bool LobService::loadSymbolList(){
     return true;
 }
 
+// sampling & fanout
+void LobService::onFanoutTimed(){
+    for(auto & symbolid : symbol_list_){
+        // savePxList(symbolid);
+        lob_px_record_t::Ptr pxr = std::make_shared<lob_px_record_t>();
+        if( !getPxList(symbolid,config_.sample_px_depth,*pxr) ){
+            continue ;
+        }
+        if( fanout_){
+            fanout_->fanout(pxr);
+        }
+    }
+}
+
 lob_px_history_t * LobService::createPxHistory(symbolid_t symbolid){
     lob_px_history_t* pxhistory = new lob_px_history_t;
     return pxhistory;
@@ -332,18 +361,25 @@ void LobService::onOrderSH(const  OrderMessage* m){
     symbolid_t symbolid = m->SecurityID;
     lob_px_list_t*  pxlist =  pxlive_[symbolid];
     uint32_t p = m->ssh_ord.Price - pxlist->low;
-    if(m->ssh_ord.OrdType == 'A'){ // 新增委托
+    
+    qDebug("onOrderSH: '%c' Side: %c", m->ssh_ord.OrdType, m->ssh_ord.Side);
+
+    if(m->ssh_ord.OrdType == 'A'){ // 新增委托        
         if(m->ssh_ord.Side =='B'){  // buy
             pxlist->bids[p].qty += m->ssh_ord.OrderQty;
+            pxlist->bids[p].ordTime = m->ssh_ord.OrderTime;
         }else if( m->ssh_ord.Side == 'S'){ // sell
             pxlist->asks[p].qty += m->ssh_ord.OrderQty;
-        }
+            pxlist->asks[p].ordTime = m->ssh_ord.OrderTime;
+        }        
     }else if( m->ssh_ord.OrdType == 'D'){ // 删除委托单
         if(m->ssh_ord.Side =='B'){
             pxlist->bids[p].qty -= m->ssh_ord.OrderQty;
+            pxlist->bids[p].ordTime = m->ssh_ord.OrderTime;
             // pxlist->bids[p].qty = std::max(0,pxlist->bids[p].qty.load());
         }else if( m->ssh_ord.Side == 'S'){
             pxlist->asks[p].qty -= m->ssh_ord.OrderQty;  
+            pxlist->asks[p].ordTime = m->ssh_ord.OrderTime;
             // pxlist->asks[p].qty = std::max(0,pxlist->asks[p].qty.load());      
         }
     }        
@@ -352,8 +388,32 @@ void LobService::onOrderSH(const  OrderMessage* m){
 /// @brief 成交回报"T" ,消除委托单的委托量
 /// @param m
 void LobService::onTradeSH(const  TradeMessage* m){
-    symbolid_t symbolid = m->SecurityID;
+     symbolid_t symbolid = m->SecurityID;
     lob_px_list_t*  pxlist =  pxlive_[symbolid];
+    uint32_t p = m->ssh_trd.LastPx - pxlist->low;
+    
+    qDebug("onTradeSH: 'T' Side: %c", m->ssh_trd.TradeBSFlag);
+    
+    if( m->ssh_trd.TradeBSFlag == 'B'){ // buy
+        if( m->ssh_trd.TradeBuyNo > 0){
+            pxlist->bids[p].qty += m->ssh_trd.LastQty;
+            pxlist->bids[p].ordTime = m->ssh_trd.TradeTime;            
+        }
+        if( m->ssh_trd.TradeSellNo > 0){
+            pxlist->asks[p].qty -= m->ssh_trd.LastQty;
+            pxlist->asks[p].ordTime = m->ssh_trd.TradeTime;
+        }
+
+    }else if( m->ssh_trd.TradeBSFlag == 'S'){ // sell
+        if( m->ssh_trd.TradeBuyNo > 0){
+            pxlist->bids[p].qty -= m->ssh_trd.LastQty;
+            pxlist->bids[p].ordTime = m->ssh_trd.TradeTime;            
+        }
+        if( m->ssh_trd.TradeSellNo > 0){
+            pxlist->asks[p].qty += m->ssh_trd.LastQty;
+            pxlist->asks[p].ordTime = m->ssh_trd.TradeTime;
+        }
+    }
 }
 
 void LobService::onOrderSZ(const  OrderMessage* m){

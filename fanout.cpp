@@ -31,7 +31,7 @@ bool LobRecordFanout::start() {
     stopped_.store(false);
 
     thread_ = std::thread([this]() {
-        std::cout << "thread1 start" << std::endl;
+        std::cout << "LobRecordFanout::thread start" << std::endl;
         zmq::context_t context(1);
         zmq::socket_t socket(context, ZMQ_PUB);
         if( boost::algorithm::to_lower_copy(config_.mode) == "connect"){
@@ -39,51 +39,22 @@ bool LobRecordFanout::start() {
         }else{
             socket.bind(config_.server_addr.c_str());
         }
-        
-        zmq::pollitem_t items[] = { {socket, 0, ZMQ_POLLIN, 0} };
-        while (stopped_.load() == false) {
-            zmq::poll(items, 1, std::chrono::milliseconds(1));
-
-            if (items[0].revents & ZMQ_POLLIN) {
-                // Data is available to be received
-                zmq::message_t message;
-                auto optret = socket.recv(message, zmq::recv_flags::dontwait); // .value_or((size_t)0);
-                if (optret.value() <= 0) {
-                    continue;
-                }
-                symbolid_t symbolid;
-                lob_data_t* data = lob_data_alloc2((char*)message.data(), message.size());
-
-                char* token;
-                size_t num = 0;
-
-                // mdl_id,UpdateTime,MDStreamID,SecurityID[3],SecurityIDSource, ...
-                token = std::strtok(data->data, ",");
-                while (token != NULL) {
-                    // printf("%s\n", token);
-                    num++;
-                    if (num == 3) {
-                        break;
-                    }
-                    token = strtok(NULL, ",");
-                    
-                }
-                if (num != 3) {
-                    continue;
-                }
-                try {
-                    // symbolid = boost::lexical_cast<symbolid_t>(token);
-                    symbolid = (symbolid_t)std::stoul(token);
-                }catch (...) {
-                    continue;
-                }
-                data->symbolid = symbolid;
-                // data->user = (void*)"order";
                 
-                // std::cout << "Received: " << data << std::endl;
+        while (stopped_.load() == false) {
+            lob_px_record_t::Ptr px_record;
+            if (!queue_.dequeue(px_record)) {
+                continue;
             }
+            msgpack::sbuffer buffer;
+            msgpack::pack(buffer, *px_record);
+
+            std::string symbolid = std::to_string(px_record->symbolid);
+            zmq::message_t topic(symbolid.c_str(),symbolid.size());
+            zmq::message_t message(buffer.data(), buffer.size());
+            socket.send(topic,zmq::send_flags::sndmore);
+            socket.send(message,zmq::send_flags::none);
         }
-        std::cout << "thread: mdl zmq  stopped" << std::endl;
+        std::cout << "LobRecordFanout::thread:   stopped" << std::endl;
     });
     return true;
 }

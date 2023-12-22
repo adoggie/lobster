@@ -13,9 +13,11 @@
 
 class  LobRecordFanout{
 public:
+    typedef std::shared_ptr<LobRecordFanout> Ptr;
     struct Settings{
         std::string server_addr; // zmq fanout server address
         std::string mode;       // bind or connect
+        bool enable;
     };
 
     LobRecordFanout(const LobRecordFanout::Settings& settings) ;

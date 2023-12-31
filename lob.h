@@ -5,8 +5,10 @@
 #include <stdint.h>
 #include <cstdlib>
 #include <list>
+#include <map>
 #include <mutex>
 #include <atomic>
+#include <tuple>
 #include <condition_variable>
 #include <thread>
 #include <algorithm>
@@ -25,6 +27,11 @@ typedef uint32_t  symbolid_t;
 typedef uint32_t  lob_price_t;
 typedef int32_t  lob_qty_t;
 struct LobService;
+
+enum lob_bs_t{
+    BUY = 0,
+    SELL = 1
+};
 
 
 struct tonglian_live_t {
@@ -52,6 +59,7 @@ struct lob_px_t {
     uint32_t  px;
     uint32_t    ordTime;
     std::atomic<int32_t> qty;
+//    int32_t qty;
 };
 #pragma pack(pop)
 
@@ -62,6 +70,7 @@ struct lob_px_list_t {
     RwMutex     mtx;
     lob_price_t   low; // 15.21 / 1521
     lob_price_t   high; // 16.50 / 1650 , => (pxlow,pxhigh) => [1521,1522,..,1650]
+    std::map< int64_t , std::tuple<lob_px_t*,lob_bs_t> > seq_pxs; 
     // lob_px_t* bid;
     lob_px_t* ask1;
     lob_px_t* bid1;
@@ -71,6 +80,9 @@ struct lob_px_list_t {
     inline 
     uint32_t get_px_span() const {
         return (high - low + 1);
+    }
+    lob_price_t get_px(lob_px_t* px, lob_px_t* base){
+        return this->low + (px - base ); ///(sizeof(lob_px_t) );
     }
 };
 

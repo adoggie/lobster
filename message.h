@@ -43,7 +43,15 @@ struct SBE_header_t //24B
 struct SBE_SSH_ord_t  //56B
 {
     // SBE_header_t  Header;    //msgType=192
-
+    enum OrdType{
+        Add = 'A',
+        Del = 'D',
+        Trade = 'T'
+    };
+    enum Side{
+        Buy = 'B',
+        Sell = 'S'
+    };
     int64_t         OrderNo;            //原始订单号 *
     int32_t         Price;              //委托价格（元）, 3位小数
     int64_t         OrderQty;           //委托数量, 3位小数
@@ -59,7 +67,11 @@ struct SBE_SSH_ord_t  //56B
 struct SBE_SSH_exe_t  //64B
 {
     // SBE_header_t  Header;    //msgType=191
-
+    enum TradeBSFlag{
+        Buy = 'B',
+        Sell = 'S',
+        Unknown = 'N'
+    };
     int64_t         TradeBuyNo;         //买方订单号
     int64_t         TradeSellNo;        //卖方订单号
     int32_t         LastPx;             //成交价格（元）, 3位小数
@@ -80,7 +92,19 @@ struct SBE_SSH_exe_t  //64B
 struct SBE_SSZ_ord_t //48B
 {
     struct SBE_header_t  Header;    //msgType=192
-
+    enum Side{
+        Buy = '1',
+        Sell = '2',
+        Borrow = 'G',
+        Lend = 'F'
+    };
+    enum OrdType{
+        Market = '1',
+        Limit = '2',
+        Best = 'U'
+    };
+    
+    int64_t         OrderNo;
     int32_t         Price;          //委托价格, Price,N13(4)
     int64_t         OrderQty;       //委托数量, Qty,N15(2)
     int8_t          Side;           //买卖方向: '1'=买, '2'=卖, 'G'=借入, 'F'=出借
@@ -95,7 +119,10 @@ struct SBE_SSZ_ord_t //48B
 struct SBE_SSZ_exe_t //64B
 {
     SBE_header_t  Header;    //msgType=191
-
+    enum ExecType{
+        Cancel = '4',
+        Trade = 'F'
+    };
     int64_t         BidApplSeqNum;  //买方委托索引 *
     int64_t         OfferApplSeqNum;//卖方委托索引 *
     int32_t         LastPx;         //成交价格, Price,N13(4)
@@ -117,6 +144,7 @@ struct OrderMessage :Message {
 };
 
 struct TradeMessage :Message {
+    TradeMessage(){ MsgType = Message::Trade;}
     typedef std::shared_ptr<TradeMessage> Ptr;
     // SBE_header_t  Header;
     union {

@@ -14,13 +14,16 @@
 #include <QTextStream>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 
 
 
 #include "service.h"
+#include "fanout_zmq.h"
 #include "feed_csv.h"
 #include "feed_tlive.h"
 #include "feed_zmq.h"
+#include "fanout_file.h"
 
 
 
@@ -74,10 +77,7 @@ bool LobService::init(const std::string& configfile) {
     config_.sample_px_depth = json["sample_px_depth"].toInt(10);
     config_.sample_interval_ms = json["sample_interval_ms"].toInt(1000);
 
-    config_.fanout_setting.server_addr = json["fanout"].toObject().value("server_addr").toString("tcp://127.0.0.1:5556").toStdString();
-    config_.fanout_setting.mode = json["fanout"].toObject().value("mode").toString("bind").toStdString();
-    config_.fanout_setting.enable = json["fanout"].toObject().value("enable").toBool(false);
-    {
+      {
         loadSymbolList();
     }
 
@@ -116,16 +116,22 @@ bool LobService::init(const std::string& configfile) {
     file.close();
     
 
-    /// parse 
+    /// parse
+    config_.symnum_of_worker = config_.lobnum / config_.workers;
+    if( config_.symnum_of_worker * config_.workers < config_.lobnum){
+        config_.symnum_of_worker ++;
+    }
     pxlive_.resize(config_.lobnum);
     pxhistory_.resize(config_.lobnum);
     workers_.resize(config_.workers);
+
+    // 直接读取mdl csv文件记录
     if (config_.feed_type == "mdl_csv") {
         decoder_ = std::make_shared<Mdl_Csv_Feed::DataDecoder>();
         feeder_ = std::make_shared<Mdl_Csv_Feed>(config_.csv_setting);
         // }else if( config_.feed_type == "mdl_live"){
         //     decoder_ = std::make_shared<Mdl_Live_Feed::DataDecoder>();
-    }else if( config_.feed_type == "mdl_zmq"){
+    }else if( config_.feed_type == "mdl_zmq"){  // 从zmq 接收
         decoder_ = std::make_shared<Mdl_Zmq_Feed::DataDecoder>();
         feeder_ = std::make_shared<Mdl_Zmq_Feed>(config_.zmq_setting);
     }else{
@@ -142,9 +148,23 @@ bool LobService::init(const std::string& configfile) {
         pxhistory_[n] = createPxHistory(n);
     }
 
-    // init fanout 
-    if( config_.fanout_setting.enable){
-        fanout_ = std::make_shared<LobRecordFanout>(config_.fanout_setting);
+    // init fanouts
+    auto array = json["fanout"].toArray();
+    for ( const auto & obj : array){
+        if( obj.isObject() ){
+            auto enable = obj.toObject().value("enable").toBool(false);
+
+            if( enable){
+                LobRecordFanout::Ptr fanout;
+                if( obj.toObject().value("name") == "zmq"){
+                    fanout = std::make_shared<LobRecordFanoutZMQ>();                    
+                }else if( obj.toObject().value("name") == "file"){
+                    fanout = std::make_shared<LobRecordFanoutFile>();
+                }
+                fanout->init(obj.toObject());
+                fanouts_.push_back(fanout);
+            }
+        }
     }
     return true;
 }
@@ -154,7 +174,10 @@ bool LobService::start() {
         worker->start();
     }
     feeder_->start();
-    if( fanout_){
+    for( auto & fanout : fanouts_){
+        fanout->start();
+    }
+    if( fanouts_.size()){
         timer_.start( config_.sample_interval_ms, std::bind(&LobService::onFanoutTimed,this) );
     }
     stopped_.store(false);
@@ -183,26 +206,16 @@ void LobService::stop() {
     for (auto& worker : workers_) {
         worker->stop();
     }
+    for(auto & fanout : fanouts_){
+        fanout->stop();
+    }
     stopped_.store(true);
     thread_.join();
+
+
     cond_.notify_all();
 }
 
-bool LobService::getPxList(symbolid_t symbolid, size_t depth, lob_px_record_t &pxr){
-    lob_px_history_t* pxlist = pxhistory_[symbolid];
-    std::shared_lock<RwMutex> lock(pxlist->mtx);
-    int32_t shift = (int32_t) std::min(depth, static_cast<size_t>(pxlist->list.size()));
-    // std::reverse_copy(pxlist->list.rbegin(), pxlist->list.rbegin() + shift, 
-    //         std::back_inserter(list));
-    // std::reverse_copy(pxlist->list.rbegin(), pxlist->list.rbegin() + (int32_t)1, 
-    //         std::back_inserter(list));
-    // std::transform( pxlist->list.rbegin(), pxlist->list.rbegin() + 
-    //         std::min(depth, static_cast<int>(pxlist->list.size())), 
-    //         std::back_inserter(list), [](lob_px_record_ptr& ptr) {
-    //             return ptr;
-    //         });
-    return true;
-}   
 
 void LobService::savePxList(symbolid_t symbolid) {
 
@@ -250,7 +263,13 @@ void LobService::onOrder(const  OrderMessage* m)
 }
 
 void LobService::onTrade(const  TradeMessage* m){
-    
+    // 上交委托
+    if(m->SecurityIDSource == Message::Source::SH){
+        onTradeSH(m);
+
+    }else if( m->SecurityIDSource == Message::Source::SZ){ // 深交所
+        onTradeSZ(m);
+    }
 }
 
 void LobService::onMessage(Message * msg){
@@ -265,16 +284,18 @@ void LobService::onMessage(Message * msg){
 
     switch(msg->MsgType){
         case Message::Order:
-           onOrder((OrderMessage*)msg);                        
+           onOrder((OrderMessage*)msg);
+           break;
         case Message::Trade:
-           onTrade((TradeMessage*)msg);                        
+           onTrade((TradeMessage*)msg);
+           break;
     }
 }
 
 void LobService::onFeedRawData(lob_data_t* data)
 {
     symbolid_t symbolid = data->symbolid;
-    uint32_t worker_idx = symbolid / config_.workers;
+    uint32_t worker_idx = symbolid / config_.symnum_of_worker;
     if (worker_idx >= workers_.size()) {
         return;
     }
@@ -343,8 +364,8 @@ void LobService::onFanoutTimed(){
         if( !getPxList(symbolid,config_.sample_px_depth,*pxr) ){
             continue ;
         }
-        if( fanout_){
-            fanout_->fanout(pxr);
+        for( auto & fout : fanouts_){
+            fout->fanout(pxr);
         }
     }
 }
@@ -355,79 +376,3 @@ lob_px_history_t * LobService::createPxHistory(symbolid_t symbolid){
 }
 
 
-void LobService::onOrderSH(const  OrderMessage* m){
-
-    // std::unique_lock<RwMutex> lock(pxlist->mtx);
-    symbolid_t symbolid = m->SecurityID;
-    lob_px_list_t*  pxlist =  pxlive_[symbolid];
-    uint32_t p = m->ssh_ord.Price - pxlist->low;
-    
-    qDebug("onOrderSH: '%c' Side: %c", m->ssh_ord.OrdType, m->ssh_ord.Side);
-
-    if(m->ssh_ord.OrdType == 'A'){ // 新增委托        
-        if(m->ssh_ord.Side =='B'){  // buy
-            pxlist->bids[p].qty += m->ssh_ord.OrderQty;
-            pxlist->bids[p].ordTime = m->ssh_ord.OrderTime;
-        }else if( m->ssh_ord.Side == 'S'){ // sell
-            pxlist->asks[p].qty += m->ssh_ord.OrderQty;
-            pxlist->asks[p].ordTime = m->ssh_ord.OrderTime;
-        }        
-    }else if( m->ssh_ord.OrdType == 'D'){ // 删除委托单
-        if(m->ssh_ord.Side =='B'){
-            pxlist->bids[p].qty -= m->ssh_ord.OrderQty;
-            pxlist->bids[p].ordTime = m->ssh_ord.OrderTime;
-            // pxlist->bids[p].qty = std::max(0,pxlist->bids[p].qty.load());
-        }else if( m->ssh_ord.Side == 'S'){
-            pxlist->asks[p].qty -= m->ssh_ord.OrderQty;  
-            pxlist->asks[p].ordTime = m->ssh_ord.OrderTime;
-            // pxlist->asks[p].qty = std::max(0,pxlist->asks[p].qty.load());      
-        }
-    }        
-}
-
-/// @brief 成交回报"T" ,消除委托单的委托量
-/// @param m
-void LobService::onTradeSH(const  TradeMessage* m){
-     symbolid_t symbolid = m->SecurityID;
-    lob_px_list_t*  pxlist =  pxlive_[symbolid];
-    uint32_t p = m->ssh_trd.LastPx - pxlist->low;
-    
-    qDebug("onTradeSH: 'T' Side: %c", m->ssh_trd.TradeBSFlag);
-    
-    if( m->ssh_trd.TradeBSFlag == 'B'){ // buy
-        if( m->ssh_trd.TradeBuyNo > 0){
-            pxlist->bids[p].qty += m->ssh_trd.LastQty;
-            pxlist->bids[p].ordTime = m->ssh_trd.TradeTime;            
-        }
-        if( m->ssh_trd.TradeSellNo > 0){
-            pxlist->asks[p].qty -= m->ssh_trd.LastQty;
-            pxlist->asks[p].ordTime = m->ssh_trd.TradeTime;
-        }
-
-    }else if( m->ssh_trd.TradeBSFlag == 'S'){ // sell
-        if( m->ssh_trd.TradeBuyNo > 0){
-            pxlist->bids[p].qty -= m->ssh_trd.LastQty;
-            pxlist->bids[p].ordTime = m->ssh_trd.TradeTime;            
-        }
-        if( m->ssh_trd.TradeSellNo > 0){
-            pxlist->asks[p].qty += m->ssh_trd.LastQty;
-            pxlist->asks[p].ordTime = m->ssh_trd.TradeTime;
-        }
-    }
-}
-
-void LobService::onOrderSZ(const  OrderMessage* m){
-    symbolid_t symbolid = m->SecurityID;
-    lob_px_list_t*  pxlist =  pxlive_[symbolid];
-    uint32_t p = m->ssz_ord.Price - pxlist->low;
-    if(m->ssz_ord.Side =='1'){ //buy
-        pxlist->bids[p].qty += m->ssz_ord.OrderQty;
-    }else if( m->ssz_ord.Side == '2'){ // sell
-        pxlist->asks[p].qty += m->ssz_ord.OrderQty;
-    }
-}
-
-void LobService::onTradeSZ(const  TradeMessage* m){
-    symbolid_t symbolid = m->SecurityID;
-    lob_px_list_t*  pxlist =  pxlive_[symbolid];
-}

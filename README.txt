@@ -19,6 +19,11 @@ https://cloud.tencent.com/developer/article/1494003
 vcpkg install 
 protobuf cppzmq jsoncpp
 vcpkg install log4cplus
+vcpkg install redis-plus-plus hiredis
+
+https://github.com/sewenew/redis-plus-plus
+
+
 
 https://github.com/log4cplus/log4cplus
 https://github.com/log4cplus/log4cplus/wiki/Code-Examples
@@ -32,3 +37,7 @@ https://protobuf.dev/
 https://github.com/protocolbuffers/protobuf/releases/download/v21.0/protoc-21.0-linux-x86_64.zip
 protoc --version 
     libprotoc 3.21.0
+
+Tonglian mdl:redis 
+    redis-cli -p 59379 -h 172.16.30.12
+    subscribe mdl.23.1.*

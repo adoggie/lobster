@@ -8,7 +8,7 @@
 #include "lob.h"
 #include <atomic>
 #include <thread>
-
+#include <QJsonObject>
 #include "lockqueue.h"
 
 class  LobRecordFanout{
@@ -19,15 +19,16 @@ public:
         std::string mode;       // bind or connect
         bool enable;
     };
-
-    LobRecordFanout(const LobRecordFanout::Settings& settings) ;
+    LobRecordFanout() = default;
+    virtual bool init(const QJsonObject& settings) ;
+    // LobRecordFanout(const LobRecordFanout::Settings& settings) ;
     ~LobRecordFanout() = default;
-    bool start();
-    void stop();
-    void fanout( lob_px_record_t::Ptr & record);
-private:
+    virtual bool start();
+    virtual void stop();
+    virtual void fanout( lob_px_record_t::Ptr & record);
+protected:
     // std::shared_ptr<LogFanoutImpl> impl_;
-    LobRecordFanout::Settings  config_;
+    // LobRecordFanout::Settings  config_;
     std::atomic<bool> stopped_;    
     std::thread  thread_;
     LockQueue<lob_px_record_t::Ptr> queue_;

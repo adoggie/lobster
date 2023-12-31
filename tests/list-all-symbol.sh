@@ -1,0 +1,2 @@
+awk -F ',' '{print $4}' /home/zhiyuan/20231129/mdl_6_33_0.csv | sort | uniq | grep -v Security >  symbol-all.txt
+awk -F ',' '{print $3}' /home/zhiyuan/20231129/mdl_4_24_0.csv | sort | uniq | grep -v TickTime >>  symbol-all.txt

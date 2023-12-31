@@ -28,10 +28,11 @@ struct lob_config_t {
     std::string symbol_list_file;
     // uint32_t  symnum_in_worker =1; // worker threads 
     uint32_t  workers; // 1 - 100
+    uint32_t  symnum_of_worker;
     mdl_live_feed_setting_t live_setting;
     mdl_csv_feed_setting_t csv_setting;
     zmq_feed_setting_t zmq_setting;
-    LobRecordFanout::Settings fanout_setting;
+    // LobRecordFanout::Settings fanout_setting;
     uint32_t     sample_interval_ms; // orb price list 采样时间
     uint32_t     sample_px_depth;   // lob px depth
 };
@@ -98,7 +99,8 @@ private:
     std::condition_variable cond_;
     std::map<symbolid_t, std::pair<float,float > > limit_pxlist_;
     std::vector<symbolid_t>     symbol_list_;
-    LobRecordFanout::Ptr fanout_;
+    
+    std::vector<LobRecordFanout::Ptr> fanouts_;
     log4cplus::Logger logger_;
     LobTimer timer_;
 };

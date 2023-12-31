@@ -9,7 +9,6 @@
 
 lob_px_list_t * lob_px_list_alloc(){
     lob_px_list_t *pxlist = new lob_px_list_t;
-    std::memset(pxlist,0,sizeof(lob_px_list_t));
     pxlist->symbolid = 0;
     pxlist->low = 0 ;
     pxlist->high = 0;

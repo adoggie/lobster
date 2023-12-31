@@ -3,17 +3,31 @@
     "feed_type": "mdl_zmq",
     "save_pxlist_infile": true,
     "save_in_dir": "/path/to/save/directory",
-    "workers": 5,
+    "workers": 1,
     "symbol_price_limit_file":"./tests/symbol_price_limit_%1.csv",
     "symbol_list_file":"./tests/symbol_list.txt",
     "sample_interval_ms": 1000,
-    "sample_px_depth":10,
+    "sample_px_depth":20,
     
-    "fanout":{
-      "enable":true,
-      "server_addr": "tcp://127.0.0.1:5556",
-      "mode": "bind"
-    },
+    "fanout":[
+      { 
+        "name":"zmq",
+        "enable":false,
+        "server_addr": "tcp://127.0.0.1:5556",
+        "mode": "bind"
+      },
+      {
+        "name":"file",
+        "enable":true,
+        "store_dir":"./store_dir"
+      },
+      {
+        "name":"redis",
+        "enable":true,
+        "server_addr":"tcp://127.0.0.1:6379"
+      }
+
+    ],
     "mdl_csv": {
       "datadir": "value1",
       "speed": 1
@@ -24,6 +38,6 @@
     },
     "mdl_zmq": {
       "server_addr": "tcp://127.0.0.1:5555",
-      "mode": "bind"
+      "mode": "connect"
     }
   }

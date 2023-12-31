@@ -37,13 +37,40 @@ endif()
 find_package(log4cplus CONFIG REQUIRED)
 find_package(msgpack-cxx CONFIG REQUIRED)
 
+
+# find_path(HIREDIS_HEADER hiredis)
+# target_include_directories(lobster PUBLIC ${HIREDIS_HEADER})
+
+# find_library(HIREDIS_LIB hiredis)
+# target_link_libraries(lobster ${HIREDIS_LIB})
+
+# find_path(REDIS_PLUS_PLUS_HEADER sw)
+# target_include_directories(lobster PUBLIC ${REDIS_PLUS_PLUS_HEADER})
+
+# find_library(REDIS_PLUS_PLUS_LIB redis++)
+# target_link_libraries(lobster ${REDIS_PLUS_PLUS_LIB})
+
+find_package(hiredis CONFIG REQUIRED)
+# target_link_libraries(lobster PRIVATE hiredis::hiredis)
+find_package(redis++ CONFIG REQUIRED)
+# target_link_libraries(lobster PRIVATE redis++::redis++_static)
+
 add_executable(lobster
-  main.cpp service.cpp feed_zmq.cpp feed_zmq.h lob.cpp worker.cpp worker.h fanout.cpp fanout.h
+  main.cpp service.cpp feed_zmq.cpp feed_zmq.h lob.cpp worker.cpp worker.h 
+  fanout.cpp fanout.h
   feed_csv.h feed_csv.cpp
+  fanout_zmq.h fanout_zmq.cpp fanout_file.h fanout_file.cpp
   proto/lob.pb.h 
+  ordtrd_sh.cpp ordtrd_sz.cpp ordtrd_pxlist.cpp
   # proto/lob.pb.cc
 )
-target_link_libraries(lobster Qt${QT_VERSION_MAJOR}::Core JsonCpp::JsonCpp cppzmq protobuf log4cplus::log4cplus msgpack-cxx )
+target_link_libraries(lobster Qt${QT_VERSION_MAJOR}::Core JsonCpp::JsonCpp 
+    cppzmq protobuf log4cplus::log4cplus msgpack-cxx 
+    hiredis::hiredis
+    redis++::redis++_static)
+
+add_executable(lockfree ./tests/lockfree_test.cpp ./lob.cpp)
+target_link_libraries(lockfree msgpack-cxx  )
 # target_link_libraries(lobster PRIVATE )
 # target_link_options(lobster PRIVATE -lprotobuf -lpthread)
 

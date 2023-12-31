@@ -2,3 +2,7 @@
   检查成交记录 T 的价格 对应的 order 是否有不一致的记录， 例如： order buy:10.5 , trade:10.2 
 2. mdl /sh 
   检查 order 'T' 记录时 LastPx * LastQty 是否等于 TradeMoney
+
+
+  2023.12.30
+  lockfree-queue has bugs need be fixed.

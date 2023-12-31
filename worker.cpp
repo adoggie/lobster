@@ -6,7 +6,7 @@ void Worker::setDataDecoder(IFeedDataDecoder* decoder){
     decoder_ = decoder;
 }
 
-void Worker::enqueue( lob_data_t * data){
+void Worker::enqueue( lob_data_t * data) {
     dataqueue_.enqueue(data);
 }
 
@@ -27,10 +27,11 @@ void Worker::start(){  // NOLINT
             if(dataqueue_.dequeue(data) == false){
                 continue;
             }
-            Message* msg = decoder_->decode(data);            
+
+            Message* msg = decoder_->decode(data);
             if(msg != nullptr){ // NOLINT
-                LobService::instance().onMessage(msg); 
-                delete msg ;      
+                LobService::instance().onMessage(msg);
+                delete msg ;
             }
             lob_data_free(data);
         }   

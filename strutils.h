@@ -21,6 +21,26 @@ namespace lobutils {
         return result;
     }
 
+    inline
+    std::string trim(const std::string& str) {
+        std::string trimmedStr = str;
+        
+        // Find the index of the first non-whitespace character
+        size_t startPos = trimmedStr.find_first_not_of(" \t\r\n");
+        if (startPos == std::string::npos) {
+            // The string only contains whitespace characters
+            return "";
+        }
+        
+        // Find the index of the last non-whitespace character
+        size_t endPos = trimmedStr.find_last_not_of(" \t\r\n");
+        
+        // Copy the substring from the first to last non-whitespace character
+        trimmedStr = trimmedStr.substr(startPos, endPos - startPos + 1);
+        
+        return trimmedStr;
+    }
+
 }
 
 #endif // !_STR_UTILS_H

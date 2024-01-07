@@ -26,30 +26,10 @@ typedef void* security_body_addr_t;
 typedef uint32_t  symbolid_t;
 typedef uint32_t  lob_price_t;
 typedef int32_t  lob_qty_t;
-struct LobService;
 
 enum lob_bs_t{
     BUY = 0,
     SELL = 1
-};
-
-
-struct tonglian_live_t {
-    std::string server_addr; // tcp://192.168.12.2:9900
-};
-
-struct mdl_csv_feed_setting_t {
-    std::string datadir; //
-    uint32_t  speed; // 1 - 100
-};
-
-struct mdl_live_feed_setting_t {
-    std::string server_addr;
-};
-
-struct zmq_feed_setting_t {
-    std::string server_addr;
-    std::string mode; // bind / connect
 };
 
 
@@ -59,22 +39,17 @@ struct lob_px_t {
     uint32_t  px;
     uint32_t    ordTime;
     std::atomic<int32_t> qty;
-//    int32_t qty;
 };
 #pragma pack(pop)
-
-
 
 struct lob_px_list_t {
     symbolid_t   symbolid;
     RwMutex     mtx;
     lob_price_t   low; // 15.21 / 1521
     lob_price_t   high; // 16.50 / 1650 , => (pxlow,pxhigh) => [1521,1522,..,1650]
-    std::map< int64_t , std::tuple<lob_px_t*,lob_bs_t> > seq_pxs; 
-    // lob_px_t* bid;
+    std::map< int64_t , std::tuple<lob_px_t*,lob_bs_t> > seq_pxs;
     lob_px_t* ask1;
     lob_px_t* bid1;
-    // lob_px_t* base;
     lob_px_t* bids;  // data base 
     lob_px_t* asks; // data base 
     inline 
@@ -105,17 +80,6 @@ struct lob_px_history_t {
     std::list< lob_px_record_ptr > list;
 };
 
-// offset = 600021 - 0
-// LOB_NUM =
-// #define  MAX_LOB_NUM  100000
-// struct lob_dir_t {
-//     uint32_t      version;
-//     lob_config_t  config;
-//     std::vector<lob_px_list_t*> live; // 0 - 600021
-//     std::vector<lob_px_history_t*> history; 
-    
-// };
-
 struct lob_context_t {
     void* service; // lob_dir_t    
 };
@@ -129,7 +93,6 @@ struct lob_data_t{
 
 lob_px_list_t * lob_px_list_alloc();
 void lob_px_list_free(lob_px_list_t* pxlist);
-
 lob_data_t* lob_data_alloc(size_t len);
 lob_data_t* lob_data_alloc2(char * data ,size_t len);
 void lob_data_free(lob_data_t* data);
@@ -138,7 +101,6 @@ typedef std::vector<uint8_t> ByteArray;
 typedef std::shared_ptr<ByteArray> ByteArrayPtr;
 
 void pxlist_snapshot(const lob_context_t* ctx, lob_px_list_t* pxlist);
-
 void put_px_vol(const lob_context_t* ctx, const char* symbol, uint32_t px, uint32_t vol);
 
 int     get_px_list(lob_context_t* ctx, const char* symbol, lob_px_t** ask, uint32_t* asknum, lob_px_t** bid, uint32_t* bidnum);

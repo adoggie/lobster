@@ -12,7 +12,7 @@
     "fanout":[
       { 
         "name":"zmq",
-        "enable":false,
+        "enable":true,
         "server_addr": "tcp://127.0.0.1:5556",
         "mode": "bind"
       },
@@ -38,6 +38,12 @@
     },
     "mdl_zmq": {
       "server_addr": "tcp://127.0.0.1:5555",
-      "mode": "connect"
+      "mode": "bind"
+    },
+    "mdl_redis": {
+      "server_addr": "tcp://172.16.30.12:9379",
+      "auth": "password",
+      "subs":[ "mdl.4.24.*"],
+      "_subs":[ "mdl.4.24.*","mdl.6.33.*","mdl.6.36.*"]
     }
   }

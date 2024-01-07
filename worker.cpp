@@ -7,7 +7,14 @@ void Worker::setDataDecoder(IFeedDataDecoder* decoder){
 }
 
 void Worker::enqueue( lob_data_t * data) {
-    dataqueue_.enqueue(data);
+//    dataqueue_.enqueue(data);
+//    return;
+    Message* msg = decoder_->decode(data);
+    if(msg != nullptr){ // NOLINT
+        LobService::instance().onMessage(msg);
+        delete msg ;
+    }
+    lob_data_free(data);
 }
 
 // here we can do some filter

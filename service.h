@@ -29,9 +29,9 @@ struct lob_config_t {
     // uint32_t  symnum_in_worker =1; // worker threads 
     uint32_t  workers; // 1 - 100
     uint32_t  symnum_of_worker;
-    mdl_live_feed_setting_t live_setting;
-    mdl_csv_feed_setting_t csv_setting;
-    zmq_feed_setting_t zmq_setting;
+    // mdl_live_feed_setting_t live_setting;
+    // mdl_csv_feed_setting_t csv_setting;
+    // zmq_feed_setting_t zmq_setting;
     // LobRecordFanout::Settings fanout_setting;
     uint32_t     sample_interval_ms; // orb price list 采样时间
     uint32_t     sample_px_depth;   // lob px depth

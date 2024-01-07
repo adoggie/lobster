@@ -11,7 +11,7 @@
 #include <shared_mutex>
 #include <mutex>
 #include <list>
-
+#include <boost/lockfree/spsc_queue.hpp>
 
 template<typename T>
 class LockQueue {
@@ -27,6 +27,8 @@ private:
     std::atomic<Node*> tail;
     std::shared_mutex   mtx;
     std::list<T>    list_;
+//    boost::lockfree::spsc_queue< int, boost::lockfree::capacity< 1024 > > spsc_queue;
+    boost::lockfree::spsc_queue< T,boost::lockfree::capacity< 1024 > > spsc_queue;
 public:
     LockQueue() : head(nullptr), tail(nullptr) {}
 

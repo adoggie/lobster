@@ -23,15 +23,15 @@
 
 //https://github.com/sewenew/redis-plus-plus
 
-bool LobRecordFanoutFile::init(const QJsonObject& settings){
+bool LobRecordFanoutRedis::init(const QJsonObject& settings){
     config_.server_addr = settings.value("server_addr").toString("tcp://127.0.0.1:6379").toStdString();
 
     return true ;
 }
 
-bool LobRecordFanoutFile::start() {
+bool LobRecordFanoutRedis::start() {
     stopped_.store(false);
-    redis_ = sw::redis::Redis(config_.server_addr);
+    redis_ = std::make_shared<sw::redis::Redis>(config_.server_addr);
 
     thread_ = std::thread([this]() {
         std::cout << "LobRecordFanoutRedis::thread start" << std::endl;
@@ -56,19 +56,24 @@ bool LobRecordFanoutFile::start() {
             line = "";            
             for(auto itr = px_record->bids.begin();itr != px_record->bids.end();itr++){
                 line +=  std::to_string(std::get<0>(*itr)) + "," + std::to_string( std::get<1>(*itr)) ;
-                if( itr !=std::prev(px_record->asks.end())){
+                if( itr !=std::prev(px_record->bids.end())){
                     line += ",";
                 }
             }
             m["bids"] = line;
-            redis_.hmset(std::to_string(px_record->symbolid), m.begin(), m.end());
+
+            std::string symbolid = std::to_string(px_record->symbolid);
+            std::ostringstream oss;
+            oss << std::setfill('0') << std::setw(6) << symbolid;
+            symbolid = oss.str();
+            redis_->hmset(symbolid, m.begin(), m.end());
         }
         std::cout << "LobRecordFanoutRedis::thread:   stopped" << std::endl;
     });
     return true;
 }
 
-void LobRecordFanoutFile::stop() {
+void LobRecordFanoutRedis::stop() {
     stopped_.store(true);
     thread_.join();
 }

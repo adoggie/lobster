@@ -56,8 +56,12 @@ bool LobRecordFanoutFile::start() {
 //                    continue;
 //                }
 //            }
+            std::string symbolid = std::to_string(px_record->symbolid);
+            std::ostringstream oss;
+            oss << std::setfill('0') << std::setw(6) << symbolid;
+            symbolid = oss.str();
 
-            std::string filename = config_.store_dir + "/" + std::to_string(px_record->symbolid) + ".lob";
+            std::string filename = config_.store_dir + "/" + symbolid + ".lob";
             file = std::make_shared<QFile>(filename.c_str());
             if(!file->open(QIODevice::WriteOnly)){
                 qWarning() << QString("Fanout_File open file failed! Detail:") << filename.c_str() ;

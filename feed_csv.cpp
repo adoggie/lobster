@@ -23,14 +23,9 @@
 #include "strutils.h"
 
 
-Mdl_Csv_Feed::Mdl_Csv_Feed(const mdl_csv_feed_setting_t& config) :config_(config)
-{
-
-}
-
-Mdl_Csv_Feed::~Mdl_Csv_Feed() {
-
-}
+ bool Mdl_Csv_Feed::init(const QJsonObject& settings) {
+    return true;
+ }
 
 bool Mdl_Csv_Feed::start() {
     stopped_.store(false);

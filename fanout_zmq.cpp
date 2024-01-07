@@ -22,6 +22,8 @@
 
 #include "lob.h"
 #include "fanout_zmq.h"
+#include "utils/logger.h"
+
 
 bool LobRecordFanoutZMQ::init(const QJsonObject& json) {
     config_.server_addr = json.value("server_addr").toString("tcp://127.0.0.1:5556").toStdString();
@@ -53,6 +55,10 @@ bool LobRecordFanoutZMQ::start() {
             msgpack::pack(buffer, *px_record);
 
             std::string symbolid = std::to_string(px_record->symbolid);
+            std::ostringstream oss;
+            oss << std::setfill('0') << std::setw(6) << symbolid;
+            symbolid = oss.str();
+
             zmq::message_t topic(symbolid.c_str(),symbolid.size());
             zmq::message_t message(buffer.data(), buffer.size());
             socket.send(topic,zmq::send_flags::sndmore);

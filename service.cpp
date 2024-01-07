@@ -15,15 +15,20 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QtCore>
 
 
 
 #include "service.h"
-#include "fanout_zmq.h"
+
 #include "feed_csv.h"
 #include "feed_tlive.h"
 #include "feed_zmq.h"
+#include "feed_tonglian_mdl_redis.h"
+
 #include "fanout_file.h"
+#include "fanout_zmq.h"
+#include "fanout_redis.h"
 
 
 
@@ -68,11 +73,6 @@ bool LobService::init(const std::string& configfile) {
     config_.save_in_dir = json.value("save_in_dir").toString().toStdString();
     config_.workers = json.value("workers").toInt(1);
     config_.symbol_price_limit_file = json.value("symbol_price_limit_file").toString("symbol_price_limit_%1.csv").toStdString();    
-    config_.csv_setting.datadir = json.value("mdl_csv").toObject().value("datadir").toString("./").toStdString();
-    config_.csv_setting.speed = json.value("mdl_csv").toObject().value("speed").toInt(1);
-    config_.live_setting.server_addr = json["mdl_live"].toObject().value("server_addr").toString("tcp://127.0.0.1:5554").toStdString();
-    config_.zmq_setting.server_addr = json["mdl_zmq"].toObject().value("server_addr").toString("tcp://127.0.0.1:5555").toStdString();
-    config_.zmq_setting.mode = json["mdl_zmq"].toObject().value("mode").toString("bind").toStdString();
     config_.symbol_list_file = json["symbol_list_file"].toString("").toStdString();
     config_.sample_px_depth = json["sample_px_depth"].toInt(10);
     config_.sample_interval_ms = json["sample_interval_ms"].toInt(1000);
@@ -88,7 +88,7 @@ bool LobService::init(const std::string& configfile) {
     std::string filename = str.toStdString();
     QFile file (filename.c_str());
     if( !file.open(QIODevice::ReadOnly | QIODevice::Text)){
-        std::cerr << "Failed to open config file: " << config_.symbol_price_limit_file << std::endl;
+        std::cerr << "Failed to open config file: " << filename << std::endl;
         return false;
     }
     QTextStream in(&file);
@@ -128,12 +128,18 @@ bool LobService::init(const std::string& configfile) {
     // 直接读取mdl csv文件记录
     if (config_.feed_type == "mdl_csv") {
         decoder_ = std::make_shared<Mdl_Csv_Feed::DataDecoder>();
-        feeder_ = std::make_shared<Mdl_Csv_Feed>(config_.csv_setting);
-        // }else if( config_.feed_type == "mdl_live"){
-        //     decoder_ = std::make_shared<Mdl_Live_Feed::DataDecoder>();
+        feeder_ = std::make_shared<Mdl_Csv_Feed>();
+        
     }else if( config_.feed_type == "mdl_zmq"){  // 从zmq 接收
         decoder_ = std::make_shared<Mdl_Zmq_Feed::DataDecoder>();
-        feeder_ = std::make_shared<Mdl_Zmq_Feed>(config_.zmq_setting);
+        feeder_ = std::make_shared<Mdl_Zmq_Feed>();
+        feeder_->init(json["mdl_zmq"].toObject());
+
+    }else if( config_.feed_type == "mdl_redis"){ // 从redis接收实时行情
+        decoder_ = std::make_shared<Mdl_Redis_Feed::DataDecoder>();
+        feeder_ = std::make_shared<Mdl_Redis_Feed>();
+        feeder_->init(json["mdl_redis"].toObject());
+    
     }else{
         return false;
     }
@@ -160,9 +166,13 @@ bool LobService::init(const std::string& configfile) {
                     fanout = std::make_shared<LobRecordFanoutZMQ>();                    
                 }else if( obj.toObject().value("name") == "file"){
                     fanout = std::make_shared<LobRecordFanoutFile>();
+                }else if( obj.toObject().value("name") == "redis"){
+                    fanout = std::make_shared<LobRecordFanoutRedis>();
                 }
-                fanout->init(obj.toObject());
-                fanouts_.push_back(fanout);
+                if( fanout ) {
+                    fanout->init(obj.toObject());
+                    fanouts_.push_back(fanout);
+                }
             }
         }
     }
@@ -279,6 +289,7 @@ void LobService::onMessage(Message * msg){
     }
     lob_px_list_t*  pxlist =  pxlive_[symbolid];
     if(pxlist == nullptr){
+        qWarning() << "symbolid: " << symbolid << ", not in the worklist!";
         return;
     }
 

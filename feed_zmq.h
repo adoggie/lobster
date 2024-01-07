@@ -7,35 +7,36 @@
 #ifndef _FEED_ZMQ_H
 #define _FEED_ZMQ_H
 
-#include "feed.h"
+#include "feed_tonglian_mdl.h"
 #include "lob.h"
 #include <atomic>
 #include <thread>
+#include <QJsonObject>
 
 class Mdl_Zmq_Feed : public FeedBase{
 public:
-    enum OrdTrdType{
-        ORD = 0,
-        TRD = 1,
-        ORDTRD = 2
-    };
+   
+    typedef tonglian::OrdTrdType OrdTrdType;
     
-    struct DataDecoder:IFeedDataDecoder{
+    struct DataDecoder:tonglian::DataDecoder{
         Message* decode(lob_data_t* data);
-        Message * decodeSH(const std::vector<std::string>& ss, OrdTrdType ordtrd);
-        Message * decodeSZ(const std::vector<std::string>& ss, OrdTrdType ordtrd);
+    };
+
+    struct Settings{
+        std::string server_addr;
+        std::string mode; // bind / connect
     };
 public:
-    Mdl_Zmq_Feed(const zmq_feed_setting_t & config);
+    bool init(const QJsonObject& settings) ; 
     ~Mdl_Zmq_Feed() = default;
+    Mdl_Zmq_Feed() = default;
     bool start();
     void stop();
 protected:
-    // Message::Ptr parse(const std::string & line);
 
 private:
     std::atomic<bool> stopped_;
-    zmq_feed_setting_t config_;
+    Settings config_;
     std::thread  thread_;
 };
 

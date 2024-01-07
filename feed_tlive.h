@@ -18,7 +18,7 @@ public:
         Message* decode(lob_data_t* data);
     };
 public:
-    Mdl_Live_Feed(const zmq_feed_setting_t & config);
+    Mdl_Live_Feed();
     ~Mdl_Live_Feed();
     bool start();
     void stop();
@@ -26,7 +26,7 @@ protected:
 
 private:
     std::atomic<bool> stopped_;
-    mdl_live_feed_setting_t config_;
+    // mdl_live_feed_setting_t config_;
     std::thread  thread_;
 };
 

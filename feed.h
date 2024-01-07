@@ -8,6 +8,7 @@
 #include <memory.h>
 #include <memory>
 #include "lob.h"
+#include <QJsonObject>
 
 struct IFeedUser{
     // virtual void onOrder(const  OrderMessage::Ptr m) = 0;
@@ -30,6 +31,7 @@ struct FeedBase{
 public:
     virtual bool start() = 0;
     virtual void stop() = 0;
+    virtual  bool init(const QJsonObject& settings) = 0; 
     void setFeedUser(IFeedUser* user){
         user_ = user;
     }
